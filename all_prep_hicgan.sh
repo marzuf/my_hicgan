@@ -4,13 +4,20 @@
 # ./all_prep_hicgan.sh  # no args, everything hard-coded
 
 start_time=$(date -R)    
-set -e
+#set -e
 
-step1=1
-step2=1
-step3=1
+step1=0 # downsample and merge count files (bash)
+step2=0 # aggregate counts (R script)
+step3=0 # prepare data for hicGAN (python script)
+step4=0 # run hicGAN (python script)
+step5a=0 # prepare data for FitHiC, low-resol and high-resol data (R script)
+step5b=0 # prepare data for FitHiC, super-resol data (R script)
+step6a=1 # run FitHiC for low-resol and high-resol data (R script)
+step6b=0 # run FitHiC for super-resol data (R script)
 
 bin_size=10000
+bin_sizeKb=$((bin_size / 1000))
+
 rexec="Rscript"
 pyexec="python"
 
@@ -30,12 +37,28 @@ output_dir_step2="$out_dir_step2/$file_prefix_step1"
 # STEP3: split and prepare data for hicGAN
 # python data_split.py <INPUT_DIR> <FILE_PREFIX> <FILE_SUFFIX HIGH-RESOL> <FILE_SUFFIX LOW-RESOL> <OUT_DIR>
 # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_MATS
-step3_script="data_split.py"
+step3_script="3_data_split.py"
 out_dir_step3="INPUT_HKL"
-hrSuffix_step3="noDS_merged_agg.txt"
-lrSuffix_step3="downsample16_merged_agg.txt"
+hrSuffix_step3="${bin_sizeKb}kb_noDS_merged_agg.txt"
+lrSuffix_step3="${bin_sizeKb}kb_downsample${ds_ratio}_merged_agg.txt"
 output_dir_step3="$out_dir_step3/$file_prefix_step1"
 
+# STEP5: prepare files for FitHiC
+step5_script="5_prep_FitHiC.R"
+out_dir_step5="PREP_FITHIC"
+output_dir_step5="$out_dir_step5/$file_prefix_step1"
+
+# STEP4a: train hicGAN
+step4a_script="4_train_hicGAN"
+# STEP4b: evaluate hicGAN
+# STEP4c: build super-resol data
+
+# STEP6: run FitHiC
+step6_script="6_run_FitHiC.R"
+out_dir_step6="RUN_FITHIC"
+output_dir_step6="$out_dir_step6/$file_prefix_step1"
+hrSuffix_step5="${bin_sizeKb}kb_noDS_merged_agg"
+lrSuffix_step5="${bin_sizeKb}kb_downsample${ds_ratio}_merged_agg"
 
 
 echo "!!! HARD-CODED:"
@@ -44,6 +67,7 @@ echo "... ds_ratio = $ds_ratio"
 
 
 all_chrs=( {1..22} )
+#all_chrs=( 1 )
 
 
 for chrom in ${all_chrs[@]}; do
@@ -60,11 +84,11 @@ for chrom in ${all_chrs[@]}; do
         mkdir -p $output_dir_step1
 
 
-        logFile_step1="$output_dir_step1/${file_prefix_step1}_${chr}_downsample_logFile.txt"
+        logFile_step1="$output_dir_step1/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_downsample_logFile.txt"
         rm -f $logFile_step1
 
         echo "> START $chr - STEP1"
-        echo "... in_dir_step1_step1 = $in_dir_step1_step1"
+        echo "... in_dir_step1 = $in_dir_step1"
         echo "... output_dir_step1 = $output_dir_step1"
         echo "... logFile_step1 = $logFile_step1"
 
@@ -82,7 +106,7 @@ for chrom in ${all_chrs[@]}; do
             num_downsample=`expr $(($num/$ds_ratio))`
             echo "... downsample from $num -> $num_downsample"
             out_name=`basename $frag_file $frag_suffix`
-            out_file="$output_dir_step1/${out_name}_downsample${ds_ratio}.txt"
+            out_file="$output_dir_step1/${out_name}_${bin_sizeKb}kb_downsample${ds_ratio}.txt"
             shuf -n $num_downsample $frag_file > $out_file
             echo "... written: $out_file"
         done
@@ -91,16 +115,16 @@ for chrom in ${all_chrs[@]}; do
         wc -l $output_dir_step1/*_downsample${ds_ratio}.txt >> $logFile_step1
 
         # MERGE ALL DOWNSAMPLED FILES (AND SORT)
-        cat "... merge downsampled data"
-        out_merged_file="$output_dir_step1/${file_prefix_step1}_${chr}_downsample${ds_ratio}_merged.txt"
+        echo "... merge downsampled data"
+        out_merged_file="$output_dir_step1/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_downsample${ds_ratio}_merged.txt"
         cat $output_dir_step1/${file_prefix_step1}_${chr}*downsample${ds_ratio}.txt | sort -k3,3n -k6,6n > $out_merged_file
         echo "... written: $out_merged_file"
         echo "Written merged file with DS:" >> $logFile_step1
         wc -l $out_merged_file >> $logFile_step1
 
         # MERGE THE NOT DOWNSAMPLED FILES (AND SORT)
-        cat "... merge init data"
-        out_merged_file_noDS="$output_dir_step1/${file_prefix_step1}_${chr}_noDS_merged.txt"
+        echo "... merge init data"
+        out_merged_file_noDS="$output_dir_step1/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_noDS_merged.txt"
         cat  $in_dir_step1/${file_prefix_step1}_${chr}_*${frag_suffix}| sort -k3,3n -k6,6n > $out_merged_file_noDS
         echo "... written: $out_merged_file_noDS"
         echo "Written merged file no DS:" >> $logFile_step1
@@ -110,8 +134,8 @@ for chrom in ${all_chrs[@]}; do
         echo "written: $logFile_step1"
 
         # OUTPUT FILES LOOK LIKE:
-        # INPUT_FRAGS/KARPAS_DMSO/KARPAS_DMSO_chr1_downsample16_merged.txt
-        # INPUT_FRAGS/KARPAS_DMSO/KARPAS_DMSO_chr1_noDS_merged.txt
+        # INPUT_FRAGS/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_downsample16_merged.txt
+        # INPUT_FRAGS/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged.txt
 
     fi # end-if STEP1
 
@@ -128,32 +152,32 @@ for chrom in ${all_chrs[@]}; do
         mkdir -p $output_dir_step2
 
 
-        logFile_step2="$output_dir_step2/${file_prefix_step1}_${chr}_aggreg_logFile.txt"
+        logFile_step2="$output_dir_step2/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_aggreg_logFile.txt"
         echo "... logFile_step2 = $logFile_step2"
         rm -f $logFile_step2
 
 
-        step1_dsFile="$output_dir_step1/${file_prefix_step1}_${chr}_downsample${ds_ratio}_merged.txt"
+        step1_dsFile="$output_dir_step1/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_downsample${ds_ratio}_merged.txt"
         ds_cmd="$rexec $step2_script $step1_dsFile $bin_size $output_dir_step2"
         
         echo "> $ds_cmd" >> $logFile_step2
         $ds_cmd >> $logFile_step2
 
-        step1_nodsFile="$output_dir_step1/${file_prefix_step1}_${chr}_noDS_merged.txt"
+        step1_nodsFile="$output_dir_step1/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_noDS_merged.txt"
         nods_cmd="$rexec $step2_script $step1_nodsFile $bin_size $output_dir_step2"
         echo "> $nods_cmd" >> $logFile_step2
         $nods_cmd >> $logFile_step2
 
         # output of step2 is then (hard-coded stuff in Rscript): 
-        # "$output_dir_step2/${file_prefix_step1}_${chr}_noDS_merged_agg.txt"
-        # "$output_dir_step2/${file_prefix_step1}_${chr}_downsample${ds_ratio}_merged_agg.txt"
+        # "$output_dir_step2/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_noDS_merged_agg.txt"
+        # "$output_dir_step2/${file_prefix_step1}_${chr}_${bin_sizeKb}kb_downsample${ds_ratio}_merged_agg.txt"
 
         echo "written: $logFile_step2"
 
 
         # OUTPUT FILES LOOK LIKE:
-        # INPUT_AGG/KARPAS_DMSO/KARPAS_DMSO_chr1_downsample16_merged_agg.txt
-        # INPUT_AGG/KARPAS_DMSO/KARPAS_DMSO_chr1_noDS_merged_agg.txt
+        # INPUT_AGG/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_downsample16_merged_agg.txt
+        # INPUT_AGG/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged_agg.txt
 
 
     fi # end-if STEP2
@@ -174,17 +198,225 @@ if [[ $step3 -eq 1 ]] ; then
 
     mkdir -p $output_dir_step3
 
-    logFile_step3="$output_dir_step3/${file_prefix_step1}_prepData_logFile.txt"
+    logFile_step3="$output_dir_step3/${file_prefix_step1}_prepData_hicGAN_logFile.txt"
     echo "... logFile_step3 = $logFile_step3"
     rm -f $logFile_step3
 
 
-    # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_MATS
+    # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_HKL
+    echo $pyexec $step3_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 $lrSuffix_step3 $output_dir_step3 
     $pyexec $step3_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 $lrSuffix_step3 $output_dir_step3 >> $logFile_step3
 
     echo "written: $logFile_step3"
 
 fi # end-if STEP3
+
+
+
+#*************************************************
+#**** STEP4a: train hicGAN (train hicGAN)
+#*************************************************
+
+if [[ $step4a -eq 1 ]] ; then
+
+    echo ""
+
+
+fi # end-if STEP4a
+
+
+
+#*************************************************
+#**** STEP4b: evaluate hicGAN (evaluate hicGAN)
+#*************************************************
+
+if [[ $step4b -eq 1 ]] ; then
+
+    echo ""
+fi # end-if STEP4b
+
+
+#*************************************************
+#**** STEP4c: run hicGAN (build super-resol matrix)
+#*************************************************
+
+if [[ $step4c -eq 1 ]] ; then
+
+    echo ""
+
+
+fi # end-if STEP4c
+
+
+#*************************************************
+#**** STEP5a: prepare data for FitHiC (low-resol and high-resol)
+#*************************************************
+
+# Rscript 5_prep_FitHiC.R INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt chr1 10000 PREP_FITHIC
+
+if [[ $step5a -eq 1 ]] ; then
+
+
+    for chrom in ${all_chrs[@]}; do
+
+        chr="chr${chrom}"
+
+
+        echo "> START - STEP5a"
+
+        mkdir -p $output_dir_step5
+
+        logFile_step5a="$output_dir_step5/${file_prefix_step1}_prepData_FitHiC_logFile.txt"
+        echo "... logFile_step5a = $logFile_step5a"
+        rm -f $logFile_step5a
+
+   
+        # Rscript 5_prep_FitHiC.R INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt chr1 10000 PREP_FITHIC/KARPAS_DMSO
+        echo "$rexec $step5_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 $chr $bin_size $output_dir_step5"
+        $rexec $step5_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 $chr $bin_size $output_dir_step5 >> $logFile_step5a
+
+        echo "$rexec $step5_script $output_dir_step2 $file_prefix_step1 $lrSuffix_step3 $chr $bin_size $output_dir_step5"
+        $rexec $step5_script $output_dir_step2 $file_prefix_step1 $lrSuffix_step3 $chr $bin_size $output_dir_step5 >> $logFile_step5a
+
+
+
+
+
+        echo "written: $logFile_step5a"
+
+        # OUTPUT FILES LOOK LIKE:
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged_agg_FitHiC_fragsfile.txt
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged_agg_FitHiC_intersfile.txt
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_downsample16_merged_agg_FitHiC_fragsfile.txt
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_downsample16_merged_agg_FitHiC_intersfile.txt
+
+
+    done
+
+
+fi # end-if STEP5a
+
+
+#*************************************************
+#**** STEP5b: prepare data for FitHiC (super-resol)
+#*************************************************
+if [[ $step5b -eq 1 ]] ; then
+
+
+    for chrom in ${all_chrs[@]}; do
+
+        chr="chr${chrom}"
+
+
+        echo "> START - STEP5b"
+
+        mkdir -p $output_dir_step5
+
+        logFile_step5b="$output_dir_step5/${file_prefix_step1}_prepData_superResol_FitHiC_logFile.txt"
+        echo "... logFile_step5b = $logFile_step5b"
+        rm -f $logFile_step5b
+
+   
+        # Rscript 5_prep_FitHiC.R INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt chr1 10000 PREP_FITHIC/KARPAS_DMSO
+        #echo "$rexec $step5_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 chr$chrom $bin_size $output_dir_step5"
+        #$rexec $step5_script $output_dir_step2 $file_prefix_step1 $hrSuffix_step3 chr$chrom $bin_size $output_dir_step5 >> $logFile_step5a
+
+
+
+
+        echo "written: $logFile_step5b"
+
+        # OUTPUT FILES LOOK LIKE:
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_XXX_FitHiC_fragsfile.txt
+        # PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_XXX_FitHiC_intersfile.txt
+
+
+    done
+
+
+fi # end-if STEP5b
+
+
+#*************************************************
+#**** STEP6a: run FitHiC (low-resol and high-resol)
+#*************************************************
+if [[ $step6a -eq 1 ]] ; then
+
+
+
+    for chrom in ${all_chrs[@]}; do
+
+        chr="chr${chrom}"
+
+
+        echo "> START - STEP6a"
+
+        mkdir -p $output_dir_step6
+
+        logFile_step6a="$output_dir_step6/${file_prefix_step1}_prepData_runFitHiC_logFile.txt"
+        echo "... logFile_step6a = $logFile_step6a"
+        rm -f $logFile_step6a
+
+
+        # Rscript 6_run_FitHiC.R PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged_agg_FitHiC_fragsfile.txt PREP_FITHIC/KARPAS_DMSO/KARPAS_DMSO_chr1_10kb_noDS_merged_agg_FitHiC_intersfile.txt RUN_FITHIC/KARPAS_DMSO/low_resol
+
+        # run for high resol data:
+        hr_fragfile="${output_dir_step5}/${file_prefix_step1}_${chr}_${hrSuffix_step5}_FitHiC_fragsfile.txt"
+        hr_interfile="${output_dir_step5}/${file_prefix_step1}_${chr}_${hrSuffix_step5}_FitHiC_intersfile.txt"
+        echo $rexec $step6_script $hr_fragfile $hr_interfile $output_dir_step6/high_resol/$chr
+        $rexec $step6_script $hr_fragfile $hr_interfile $output_dir_step6/high_resol/$chr >> $logFile_step6a
+
+
+        # run for low resol data:
+        lr_fragfile="${output_dir_step5}/${file_prefix_step1}_${chr}_${lrSuffix_step5}_FitHiC_fragsfile.txt"
+        lr_interfile="${output_dir_step5}/${file_prefix_step1}_${chr}_${lrSuffix_step5}_FitHiC_intersfile.txt"
+        echo $rexec $step6_script $lr_fragfile $lr_interfile $output_dir_step6/low_resol/$chr
+        $rexec $step6_script $lr_fragfile $lr_interfile $output_dir_step6/low_resol/$chr >> $logFile_step6a
+
+        echo "written: $logFile_step6a"
+
+        # OUTPUT FILES LOOK LIKE:
+
+    done
+
+
+
+
+
+fi # end-if STEP6a
+
+
+#*************************************************
+#**** STEP6b: run FitHiC (super-resol)
+#*************************************************
+if [[ $step6b -eq 1 ]] ; then
+
+
+
+    for chrom in ${all_chrs[@]}; do
+
+        chr="chr${chrom}"
+
+
+        echo "> START - STEP6b"
+
+        mkdir -p $output_dir_step6
+
+        logFile_step6b="$output_dir_step6/${file_prefix_step1}_prepData_superResol_runFitHiC_logFile.txt"
+        echo "... logFile_step6b = $logFile_step6b"
+        rm -f $logFile_step6b
+
+
+        echo "written: $logFile_step6b"
+
+
+    done
+
+
+fi # end-if STEP6b
+
+
+
 
 
 
