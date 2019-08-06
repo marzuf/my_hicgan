@@ -8,11 +8,13 @@ start_time=$(date -R)
 
 step1=0 # downsample and merge count files (bash)
 step2=0 # aggregate counts (R script)
-step3=0 # prepare data for hicGAN (python script)
-step4=0 # run hicGAN (python script)
+step3=1 # prepare data for hicGAN (python script)
+step4a=0 # run hicGAN (python script)
+step4b=0 # evaluate hicGAN (python script)
+step4c=0 # predict super-resol with hicGAN (python script)
 step5a=0 # prepare data for FitHiC, low-resol and high-resol data (R script)
 step5b=0 # prepare data for FitHiC, super-resol data (R script)
-step6a=1 # run FitHiC for low-resol and high-resol data (R script)
+step6a=0 # run FitHiC for low-resol and high-resol data (R script)
 step6b=0 # run FitHiC for super-resol data (R script)
 
 bin_size=10000
@@ -59,6 +61,11 @@ out_dir_step6="RUN_FITHIC"
 output_dir_step6="$out_dir_step6/$file_prefix_step1"
 hrSuffix_step5="${bin_sizeKb}kb_noDS_merged_agg"
 lrSuffix_step5="${bin_sizeKb}kb_downsample${ds_ratio}_merged_agg"
+
+# STEP7a: cmpFitHiC - low_resol vs. high_resol
+step7_script="7_cmp_FitHiC.R"
+
+# STEP7b: cmpFitHiC - low_resol vs. super_resol
 
 
 echo "!!! HARD-CODED:"

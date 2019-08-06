@@ -6,7 +6,11 @@ import pickle
 # python data_split.py <INPUT_DIR> <FILE_PREFIX> <FILE_SUFFIX HIGH-RESOL> <FILE_SUFFIX LOW-RESOL> <OUT_DIR>
 # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_HKL/KARPAS_DMSO
 
-if len(sys.argv) != 6:
+# python data_split.py <INPUT_DIR> <FILE_PREFIX> <FILE_SUFFIX HIGH-RESOL> <FILE_SUFFIX LOW-RESOL> <OUT_DIR> <train_chromo> <test_chromo>
+# python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_HKL/KARPAS_DMSO [1,2] [3,4]
+
+
+if not (len(sys.argv) == 6 or len(sys.argv) == 8) :
     print("ERROR: invalid number of arguments!")
     sys.exit(1)
 
@@ -22,15 +26,26 @@ if not os.path.exists(input_dir):
     print("ERROR: data path wrong !")
     sys.exit(1)
 
-### HARD-CODED STUFF:
-#chromo_list = list(range(1,23))   #chr1-chr22
-#train_chromo_list = list(range(1,18))
-#test_chromo_list = list(range(18,23))
 
-chromo_list = list(range(1,3))   #chr1-chr22
-train_chromo_list = list(range(1,2))
-test_chromo_list = list(range(2,3))
 
+if len(sys.argv) == 8:
+    train_chromo_list = eval(sys.argv[6])
+    test_chromo_list = eval(sys.argv[7])
+    assert isinstance(train_chromo_list, list)
+    assert isinstance(test_chromo_list, list)
+    assert all(i in list(range(1,23)) for i in train_chromo_list)
+    assert all(i in list(range(1,23)) for i in test_chromo_list)    
+else :
+    ### HARD-CODED STUFF:
+    #chromo_list = list(range(1,23))   #chr1-chr22
+    #train_chromo_list = list(range(1,18))
+    #test_chromo_list = list(range(18,23))
+    #chromo_list = list(range(1,5))   #chr1-chr22
+    train_chromo_list = list(range(1,3))
+    test_chromo_list = list(range(3,5))
+
+chromo_list = train_chromo_list + test_chromo_list
+chromo_list.sort()
 
 size_file = "all_chr_length.txt"
 assert os.path.exists(size_file)
