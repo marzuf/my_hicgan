@@ -3,12 +3,15 @@ import numpy as np
 import hickle as hkl
 import pickle
 
+import datetime
+
 # python data_split.py <INPUT_DIR> <FILE_PREFIX> <FILE_SUFFIX HIGH-RESOL> <FILE_SUFFIX LOW-RESOL> <OUT_DIR>
 # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_HKL/KARPAS_DMSO
 
 # python data_split.py <INPUT_DIR> <FILE_PREFIX> <FILE_SUFFIX HIGH-RESOL> <FILE_SUFFIX LOW-RESOL> <OUT_DIR> <train_chromo> <test_chromo>
 # python data_split.py INPUT_AGG/KARPAS_DMSO KARPAS_DMSO noDS_merged_agg.txt downsample16_merged_agg.txt INPUT_HKL/KARPAS_DMSO [1,2] [3,4]
 
+startTime = datetime.datetime.now()
 
 if not (len(sys.argv) == 6 or len(sys.argv) == 8) :
     print("ERROR: invalid number of arguments!")
@@ -26,8 +29,6 @@ if not os.path.exists(input_dir):
     print("ERROR: data path wrong !")
     sys.exit(1)
 
-
-
 if len(sys.argv) == 8:
     train_chromo_list = eval(sys.argv[6])
     test_chromo_list = eval(sys.argv[7])
@@ -37,12 +38,12 @@ if len(sys.argv) == 8:
     assert all(i in list(range(1,23)) for i in test_chromo_list)    
 else :
     ### HARD-CODED STUFF:
-    #chromo_list = list(range(1,23))   #chr1-chr22
-    #train_chromo_list = list(range(1,18))
-    #test_chromo_list = list(range(18,23))
+    chromo_list = list(range(1,23))   #chr1-chr22
+    train_chromo_list = list(range(1,18))
+    test_chromo_list = list(range(18,23))
     #chromo_list = list(range(1,5))   #chr1-chr22
-    train_chromo_list = list(range(1,3))
-    test_chromo_list = list(range(3,5))
+    #train_chromo_list = list(range(1,3))
+    #test_chromo_list = list(range(3,5))
 
 chromo_list = train_chromo_list + test_chromo_list
 chromo_list.sort()
@@ -336,3 +337,22 @@ print("... written: " + test_data_file)
 #hr_mats_test,lr_mats_test,distance_test = data_split(['chrom%d'%idx for idx in list(range(18,23))],norm_type=0)
 #hkl.dump([lr_mats_train,hr_mats_train,distance_train],'data/%s/train_data_raw_count.hkl'%cell)
 #hkl.dump([lr_mats_test,hr_mats_test,distance_test],'data/%s/test_data_raw_count.hkl'%cell)
+
+
+
+################################################################################################
+################################################################################################ DONE
+################################################################################################
+endTime = datetime.datetime.now()
+
+mylog = open(logFile,"a+") 
+mylog.write(str(startTime) + "\n" + str(endTime))
+mylog.close() 
+
+print("*** DONE")
+print(str(startTime) + " - " + str(endTime))
+print("... logs written in: " + logFile)
+
+
+
+

@@ -12,6 +12,9 @@ from tensorlayer.layers import *
 import matplotlib.pyplot as plt
 import hickle as hkl
 
+import datetime
+
+startTime = datetime.datetime.now()
 
 
 #python.py train_hicGAN.py <TRAIN_DATA_file> <MAIN_OUTPUT_DIR> 
@@ -37,6 +40,9 @@ if not os.path.exists(train_data_file):
 
 output_dir = sys.argv[2]
 os.makedirs(output_dir, exist_ok = True)
+
+logFile = os.path.join(output_dir, "train_hicgan_logFile.txt")
+print("... write logs in:\t" + logFile)
 
 checkpoint_dir = os.path.join(output_dir, "checkpoint")
 log_dir = os.path.join(output_dir, "log")
@@ -86,8 +92,8 @@ print("chromo_list = " + str(chromo_list))
 
 # depending of the data used, might also hold distances
 tmp = hkl.load(train_data_file)
-lr_mats_train = tmp[1]
-hr_mats_train = tmp[2]
+lr_mats_train = tmp[0]
+hr_mats_train = tmp[1]
 
 
 
@@ -265,7 +271,20 @@ for epoch in range(0, n_epoch + 1):
         tl.files.save_npz(net_d.all_params, name=checkpoint_dir + '/d_{}_{}.npz'.format(tl.global_flag['mode'],epoch), sess=sess)
 
 
+################################################################################################
+################################################################################################ DONE
+################################################################################################
+endTime = datetime.datetime.now()
+print("*** DONE")
+print(str(startTime) + " - " + str(endTime))
 
+
+
+mylog = open(logFile,"a+") 
+mylog.write(str(startTime) + "\n" + str(endTime))
+mylog.close() 
+
+print("... logs written in: " + logFile)
 
 
 
